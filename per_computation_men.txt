@@ -1,0 +1,178 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import os
+
+def extraction_webscrapping(url, output_file, header_tag, keep_columns=None):
+    response = requests.get(url)
+    if response.status_code == 200:
+        print("Successfully fetched the webpage.")
+    else:
+        print(f"Failed to fetch the webpage: {response.status_code}")
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+    table = soup.find('table')
+    
+    headers = []
+    for th in table.find('thead').find_all(header_tag):
+        headers.append(th.text.strip())
+    print(f"Headers found: {headers}")
+    
+    rows = []
+    for tr in table.find('tbody').find_all('tr'):
+        cells = tr.find_all('td')
+        row = [cell.text.strip() for cell in cells]
+        rows.append(row)
+    
+    df = pd.DataFrame(rows, columns=headers)
+    
+    if keep_columns:
+        print(f"Filtering to keep columns: {keep_columns}")
+        df = df[keep_columns]
+    
+    output_path = os.path.join('csv', output_file)
+    #df.to_csv(,output_file, index=False)
+    df.to_csv(output_path, index=False)
+    print(f"Data successfully scraped and saved to {output_file}")
+    print(f"Data successfully scraped")
+
+def extract_wnba_player_salaries(url, output_file):
+    response = requests.get(url)
+    if response.status_code == 200:
+        print("Successfully fetched the webpage.")
+    else:
+        print(f"Failed to fetch the webpage: {response.status_code}")
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+    table = soup.find('table')
+    
+    headers = ["Player", "2024 Salary"]
+    rows = []
+    
+    for tr in table.find('tbody').find_all('tr'):
+        cells = tr.find_all('td')
+        name = cells[0].text.strip().split('\n')[0]  # Only take first part for the name
+        salary = cells[1].text.strip().split()[0]    # Only take the salary amount
+        row = [name, salary]
+        rows.append(row)
+    
+    df = pd.DataFrame(rows, columns=headers)
+    df.to_csv(output_file, index=False)
+    print(f"Data successfully scraped and saved to {output_file}")
+
+#Number of points of a player (per game)
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/points", 'player-stat_2024.csv', 'th')
+#Effective field goal % (per game):
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/efg-percentage", 'efg-percentage_2024.csv', 'th')
+#Assists (per game):
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/assists", 'assists_2024.csv', 'th')
+#Win score (per game):
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/win-score", 'win_score_2024.csv', 'th')
+#Minutes played (per game):
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/minutes-played",'minutes_played.csv','th')
+# 'rebounds-offensive.csv'
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/rebounds-offensive",'rebounds-offensive.csv','th')
+# 'rebounds-defensive.csv'
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/rebounds-defensive",'rebounds-defensive.csv','th')
+# 'blocks.csv'
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/blocks",'blocks.csv','th')
+# steals
+extraction_webscrapping("https://www.teamrankings.com/nba/player-stat/steals",'steals.csv','th')
+
+
+
+#########################################################################
+
+
+import pandas as pd
+
+############  READ THE CSV ###########
+#Assists per game
+df_assists = pd.read_csv(os.path.join('csv', 'assists_2024.csv'))
+df_assists.rename(columns={'Value':'AST' } , inplace=True)
+#display('Assists per game')
+#display(df_assists)
+
+
+#Points per game
+df_player_stats = pd.read_csv(os.path.join('csv', 'player-stat_2024.csv'))
+df_player_stats.rename(columns={'Value':'PTS' } , inplace=True)
+#display('Points per game')
+#display(df_player_stats)
+
+
+#Games Played  --> Minutes Played ?!
+df_minutes_played = pd.read_csv(os.path.join('csv', 'minutes_played.csv'))
+df_player_stats.rename(columns={'Value':'Minutes_played_per_game' } , inplace=True)
+#display('Minutes Played')
+#display(df_minutes_played)
+
+
+#Offensive rebounds (per game):
+df_OR = pd.read_csv(os.path.join('csv', 'rebounds-offensive.csv'))
+df_OR.rename(columns={'Value':'ORB' } , inplace=True)
+#display('Offensive rebounds per game')
+#display(df_OR)
+
+#Defensive rebounds (per game):
+df_DRB = pd.read_csv(os.path.join('csv', 'rebounds-defensive.csv'))
+df_DRB.rename(columns={'Value':'DRB' } , inplace=True)
+#display('Defensive rebounds per game')
+#display(df_DRB)
+
+#Blocks (per game):
+df_BLK = pd.read_csv(os.path.join('csv', 'blocks.csv'))
+df_BLK.rename(columns={'Value':'BLK' } , inplace=True)
+#display('Blocks per game')
+#display(df_BLK)
+
+#Steal (per game):
+df_STL = pd.read_csv(os.path.join('csv', 'steals.csv'))
+df_STL.rename(columns={'Value':'STL' } , inplace=True)
+#display('Steal per game')
+#display(df_STL)
+
+
+############  Merge ###########
+
+#Merge vs points and assist (merged):
+df_points_and_assists = df_assists.merge(df_player_stats, on=["Player" , "Pos", "Team"])
+#display("Points and assist (merged):")
+#display(df_points_and_assists)
+
+#Final result: df_points_and_assists merged with df_OR (offensive rebounds) sorted by Points_per_game:
+second_merge = df_points_and_assists.merge(df_OR , on=["Player" , "Pos", "Team"], how='outer')
+second_merge = second_merge.dropna()
+
+second_merge.rename(columns={'Value':'Minutes_played_per_game' } , inplace=True)
+second_merge.sort_values(by=['PTS']).reset_index()
+# Remove of columns : 
+second_merge.drop(columns = ['Rank_x', 'Rank_y','Rank','Team','Pos'] , axis=1, inplace=True)
+# Rounds every numerical columns to 1 decimal
+second_merge = second_merge.round(1)
+
+#Finally, Offensive PER computation
+second_merge['O_PER'] = round((second_merge['AST'] + second_merge['PTS']  + second_merge['ORB'])/3 ,1)
+display('length (Offensive PER computation): ', len(second_merge))
+display("Points_and_assist merged with offensive rebounds and sorted by Points_per_game PTS (offensive PER rounded):")
+display(second_merge)
+#Final csv offense
+second_merge.to_csv('nba_player_salaries_2024.csv')
+second_merge = second_merge.head(50)
+second_merge.to_csv('nba_player_salaries_top_50_2024.csv')
+
+#pd.concat([df_BLK,df_DRB , df_STL] , axis=1)
+##### Defense Merge #####
+# df_BLK and df_DRB
+defense = df_BLK.merge(df_DRB, on=["Player"], how='outer')
+defense = defense.merge(df_STL , on=["Player"], how='outer')
+defense = defense.dropna()
+defense.drop(columns = ['Rank_x','Team_x', 'Team_y','Pos_x' ,'Rank_y' ,'Pos_y' ,'Rank' ,'Pos','Team'] , axis=1, inplace=True)
+
+#a) Merge of Pdf_BLK and df_DRB
+defense['D_PER'] = round((defense['BLK'] + defense['DRB']  + defense['STL'])/3 ,1)
+defense.to_csv('nba_player_defensive_2024.csv')
+display('length (Defensive D_PER computation): ', len(defense))
+display("nba_player_defensive_2024 " , defense)
+defense = defense.head(50)
+defense.to_csv('nba_player_top_50_defensive_2024.csv')
